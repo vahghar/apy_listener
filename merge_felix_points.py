@@ -8,15 +8,6 @@ RPC_URL = "https://rpc.hyperliquid.xyz/evm"
 
 PRICE_DECIMALS = 10 ** 8
 
-AIRDROP_PERCENT = 0.20      
-FDV = 100_000_000
-TOTAL_PROJECTED_POINTS = 7_593_928
-WEEKLY_POINTS = 146_037
-user_lped_usd = 1000
-
-value_per_point = (AIRDROP_PERCENT * FDV) / TOTAL_PROJECTED_POINTS
-weekly_points_value_usd = WEEKLY_POINTS * value_per_point
-annual_points_value_usd = weekly_points_value_usd * 52
 
 web3 = Web3(Web3.HTTPProvider(RPC_URL))
 if not web3.is_connected():
@@ -231,7 +222,8 @@ def calculate_vault_tvl(vault_contract, oracle_contract, vault_name: str) -> flo
         print(f"❌ [{vault_name}] Error calculating TVL: {e}")
         return 0.0
 
-def calculate_points_apy(user_lped_usd: float, vault_tvl_usd: float) -> Tuple[float, float]:
+def calculate_points_apy_felix(user_lped_usd: float, vault_tvl_usd: float) -> Tuple[float, float]:
+
     """
     Calculate Points APY for a user.
     
@@ -239,6 +231,17 @@ def calculate_points_apy(user_lped_usd: float, vault_tvl_usd: float) -> Tuple[fl
     :param vault_tvl_usd: Total USD value locked in the vault.
     :return: (points_apy_percent, points_value_apy_percent)
     """
+
+    AIRDROP_PERCENT = 0.20      
+    FDV = 100_000_000
+    TOTAL_PROJECTED_POINTS = 7_593_928
+    WEEKLY_POINTS = 146_037
+    user_lped_usd = 1000
+
+    value_per_point = (AIRDROP_PERCENT * FDV) / TOTAL_PROJECTED_POINTS
+    weekly_points_value_usd = WEEKLY_POINTS * value_per_point
+    annual_points_value_usd = weekly_points_value_usd * 52
+
     if vault_tvl_usd <= 0 or user_lped_usd <= 0:
         return 0.0, 0.0
     
@@ -255,6 +258,7 @@ def calculate_points_apy(user_lped_usd: float, vault_tvl_usd: float) -> Tuple[fl
     
     return points_value_apy
 
+def calculate
 
 def main():
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
@@ -303,7 +307,7 @@ def main():
         #points_apy = (annual_points_value_usd / vault_tvl) * 100
         #print(f"💎 Points APY ({token}): {points_apy:.2f}%")
 
-        points_apy_usd = calculate_points_apy(user_lped_usd, vault_tvl)
+        points_apy_usd = calculate_points_apy_felix(user_lped_usd, vault_tvl)
         #print(f"💎 Points APY ({token}): {points_apy_points:.2f}% (in points)")
         print(f"💵 Points Value APY ({token}): {points_apy_usd:.2f}% (in USD value)")
 
