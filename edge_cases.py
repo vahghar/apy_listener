@@ -177,7 +177,7 @@ def get_hyperlend_yields_and_tvl():
     except Exception as e:
         send_telegram_message(f"❌ Error fetching HyperLend data on-chain: {e}")
         return {}
-#here ends for hyperlend
+#here starts for hyperlend
 
 #here starts for hypurrfi
 def get_hypurrfi_yields_and_tvl():
