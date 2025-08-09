@@ -21,6 +21,12 @@ if not web3.is_connected():
 ORACLE_ADDRESS = web3.to_checksum_address("0x9BE2ac1ff80950DCeb816842834930887249d9A8")
 PROTOCOL_DATA_PROVIDER_ADDRESS = web3.to_checksum_address("0x895C799a5bbdCb63B80bEE5BD94E7b9138D977d6")
 
+VAULT_ADDRESSES = {
+    "USDe": web3.to_checksum_address("0x835febf893c6dddee5cf762b0f8e31c5b06938ab"),
+    "USDT0": web3.to_checksum_address("0xfc5126377f0efc0041c0969ef9ba903ce67d151e"),
+    "HYPE": web3.to_checksum_address("0x2900ABd73631b2f60747e687095537B673c06A76"),
+}
+
 with open("abi/HyFiOracle.json") as f:
     oracle_abi = json.load(f)
 with open("abi/HyFiFiDataProvider.json") as f:
@@ -29,7 +35,6 @@ with open("abi/HyFiFiDataProvider.json") as f:
 
 oracle_contract = web3.eth.contract(address=ORACLE_ADDRESS, abi=oracle_abi)
 data_provider_contract = web3.eth.contract(address=PROTOCOL_DATA_PROVIDER_ADDRESS, abi=data_provider_abi)
-
 
 HYPERLEND_ORACLE_ADDRESS = web3.to_checksum_address("0xC9Fb4fbE842d57EAc1dF3e641a281827493A630e")
 HYPERLEND_DATA_PROVIDER_ADDRESS = web3.to_checksum_address("0x5481bf8d3946E6A3168640c1D7523eB59F055a29")
@@ -157,7 +162,10 @@ def get_hypurrfi_yields_and_tvl():
 
     return results
 
+
+
 def calculate_effective_yield(current_apy: float, current_tvl: float, deposit_amount: float) -> float:
+
     """
     Calculate future yield using the reward dilution formula:
     (Annual Rewards / (TVL + Deposit)) * 100
@@ -172,6 +180,7 @@ def calculate_effective_yield(current_apy: float, current_tvl: float, deposit_am
     """
     annual_rewards = (current_apy / 100) * current_tvl
     return (annual_rewards / (current_tvl + deposit_amount)) * 100
+
 
 def compare_yields(hyperlend_data: dict, hypurrfi_data: dict) -> str:
     lines = [
@@ -225,6 +234,7 @@ def max_deposit_to_match_yield(higher_apy, higher_tvl, lower_apy) -> float:
     if lower_apy >= higher_apy or lower_apy == 0:
         return 0.0
     return ((higher_apy - lower_apy) * higher_tvl) / lower_apy
+
 
 
 

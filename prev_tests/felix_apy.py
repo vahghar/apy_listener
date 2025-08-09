@@ -14,7 +14,6 @@ if not web3.is_connected():
 # Contract addresses
 MORPHO_CONTRACT = "0x68e37de8d93d3496ae143f2e900490f6280c57cd"
 FELIX_CONTRACT = "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483"
-#ORACLE_ADDRESS = web3.to_checksum_address("0x9BE2ac1ff80950DCeb816842834930887249d9A8")
 
 VAULT_ADDRESSES = {
     "USDe": web3.to_checksum_address("0x835febf893c6dddee5cf762b0f8e31c5b06938ab"),
@@ -157,15 +156,12 @@ def calculate_borrow_apy(borrow_rate: int) -> float:
 
 def calculate_supply_apy(borrow_rate: int, market_data: Dict[str, Any]) -> float:
     """Compute supply APY from borrow rate, utilization, and fee"""
-    # borrow_rate is assumed in ray (1e27) per second
-    # Convert to per-second rate
     rate_per_second = borrow_rate / 1e18
     # Utilization = borrowed assets / supplied assets
     util = 0
     if market_data['totalSupplyAssets'] > 0:
         util = market_data['totalBorrowAssets'] / market_data['totalSupplyAssets']
-    # Reserve factor = fee (in ray)
-    
+
     reserve_factor = market_data['fee'] / 1e18
     # Supply rate per second
     supply_rate = rate_per_second * util * (1 - reserve_factor)
@@ -223,7 +219,7 @@ def main():
 
             borrow_rates.append(borrow_rate); datas.append(market_data)
 
-            print(f"Borrow APY: {borrow_apy:.2f}%")
+            #print(f"Borrow APY: {borrow_apy:.2f}%")
             print(f"Supply APY: {supply_apy:.2f}%")
         
         vault_apy = calculate_vault_supply_apy(borrow_rates, datas)

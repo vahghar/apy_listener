@@ -6,12 +6,13 @@ import math
 
 RPC_URL = "https://rpc.hyperliquid.xyz/evm" 
 
+PRICE_DECIMALS = 10 ** 8
+
 web3 = Web3(Web3.HTTPProvider(RPC_URL))
 if not web3.is_connected():
     send_telegram_message("❌ Failed to connect to HypurrFi RPC")
     exit()
 
-# Contract addresses
 MORPHO_CONTRACT = "0x68e37de8d93d3496ae143f2e900490f6280c57cd"
 FELIX_CONTRACT = "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483"
 ORACLE_ADDRESS = web3.to_checksum_address("0x9BE2ac1ff80950DCeb816842834930887249d9A8")
@@ -50,8 +51,7 @@ def load_abi(filename: str) -> list:
     with open(filename, 'r') as f:
         return json.load(f)
 
-def setup_contracts(web3: Web3) -> Tuple[Any, Any]:
-    """Setup contract instances"""
+def setup_contracts(web3: Web3, vault_address: str) -> Tuple[Any, Any]:
     morpho_abi = load_abi('abi/Morpho.json')
     felix_abi = load_abi('abi/Felix.json')
     vault_abi = load_abi('abi/vault1.json')
@@ -68,7 +68,8 @@ def setup_contracts(web3: Web3) -> Tuple[Any, Any]:
     )
     
     vault_contract = web3.eth.contract(
-        address = web3.to_checksum_address(hype_contract), abi = vault_abi
+        address=web3.to_checksum_address(vault_address),
+        abi=vault_abi
     )
 
     oracle_contract = web3.eth.contract(
@@ -76,7 +77,7 @@ def setup_contracts(web3: Web3) -> Tuple[Any, Any]:
         abi=oracle_abi
     )
 
-    return morpho_contract, felix_contract, vault_contract, oracle_contract
+    return morpho_contract, felix_contract, vault_contract , oracle_contract
 
 def fetch_market_params(morpho_contract, market_id: str) -> Dict[str, Any]:
     """Fetch MarketParams from Morpho contract"""
@@ -157,15 +158,12 @@ def calculate_borrow_apy(borrow_rate: int) -> float:
 
 def calculate_supply_apy(borrow_rate: int, market_data: Dict[str, Any]) -> float:
     """Compute supply APY from borrow rate, utilization, and fee"""
-    # borrow_rate is assumed in ray (1e27) per second
-    # Convert to per-second rate
     rate_per_second = borrow_rate / 1e18
     # Utilization = borrowed assets / supplied assets
     util = 0
     if market_data['totalSupplyAssets'] > 0:
         util = market_data['totalBorrowAssets'] / market_data['totalSupplyAssets']
-    # Reserve factor = fee (in ray)
-    
+
     reserve_factor = market_data['fee'] / 1e18
     # Supply rate per second
     supply_rate = rate_per_second * util * (1 - reserve_factor)
@@ -185,12 +183,44 @@ def calculate_vault_supply_apy(borrow_rates: list, market_datas: list) -> float:
         weighted += weight * calculate_supply_apy(br, market_data)
     return weighted
 
-def calculate_vault_tvl(vault_contract, oracle_contract) -> float:
-    raw_total_assets = vault_contract.functions.totalAssets().call()
-    token_address = vault_contract.function.
-    decimals = vault_contract.functions.decimals().call()
-    asset_price = oracle_contract.functions.getAssetPrice().call()
-    return raw_total_assets / (10 ** decimals)
+def calculate_vault_tvl(vault_contract, oracle_contract, vault_name: str) -> float:
+    try:
+        # Step 1: Get underlying asset
+        asset_address = vault_contract.functions.asset().call()
+        print(f"\n🔍 [{vault_name}] Underlying asset: {asset_address}")
+
+        # Step 2: Get total assets and decimals
+        raw_total_assets = vault_contract.functions.totalAssets().call()
+
+        # Hardcode decimals for USDT0
+        if vault_name == "USDT0":
+            decimals = 6
+        else:
+            decimals = vault_contract.functions.decimals().call()
+
+        print(f"📦 [{vault_name}] Raw total assets: {raw_total_assets}")
+        print(f"🔢 [{vault_name}] Vault decimals: {decimals}")
+
+        # Step 3: Get token price from oracle
+        token_price = oracle_contract.functions.getAssetPrice(asset_address).call()
+        print(f"💲 [{vault_name}] Token price from oracle: {token_price}")
+
+        if raw_total_assets == 0:
+            print(f"⚠️ [{vault_name}] totalAssets is 0")
+        if token_price == 0:
+            print(f"⚠️ [{vault_name}] Oracle returned 0 price for asset")
+        if decimals == 0:
+            print(f"⚠️ [{vault_name}] Decimals is 0 (unusual)")
+
+        # Step 4: Calculate TVL
+        tvl = (raw_total_assets * token_price) / (10 ** decimals * PRICE_DECIMALS)
+        print(f"✅ [{vault_name}] TVL: ${tvl:,.2f}")
+        return tvl
+
+    except Exception as e:
+        print(f"❌ [{vault_name}] Error calculating TVL: {e}")
+        return 0.0
+
 
 def main():
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
@@ -199,11 +229,15 @@ def main():
         return
 
     print("✅ Connected to HyperEVM")
-    morpho_contract, felix_contract, vault_contract, oracle_contract = setup_contracts(w3)
+
+    results = {}  # final results like {"USDe": {"apy": x, "tvl": y}, ...}
 
     for token, market_ids in markets_by_token.items():
         print(f"\n🔹 Token: {token}")
+        vault_address = VAULT_ADDRESSES[token]
+        morpho_contract, felix_contract, vault_contract, oracle_contract = setup_contracts(w3, vault_address)
         borrow_rates, datas = [], []
+
         for market_id in market_ids:
             print(f"\n➡️  Market ID: {market_id}")
             market_params = fetch_market_params(morpho_contract, market_id)
@@ -221,16 +255,27 @@ def main():
             borrow_apy = calculate_borrow_apy(borrow_rate)
             supply_apy = calculate_supply_apy(borrow_rate, market_data)
 
-            borrow_rates.append(borrow_rate); datas.append(market_data)
+            borrow_rates.append(borrow_rate)
+            datas.append(market_data)
 
-            print(f"Borrow APY: {borrow_apy:.2f}%")
             print(f"Supply APY: {supply_apy:.2f}%")
         
         vault_apy = calculate_vault_supply_apy(borrow_rates, datas)
         print(f"🔸 Vault Supply APY ({token}): {vault_apy:.2f}%")
 
-        vault_tvl = calculate_vault_tvl(vault_contract, oracle_contract)
+        vault_tvl = calculate_vault_tvl(vault_contract, oracle_contract, token)
         print(f"💰 Vault TVL ({token}): ${vault_tvl:,.2f}")
+
+        # Store results in dictionary
+        results[token] = {
+            "apy": round(vault_apy, 2),
+            "tvl": round(vault_tvl, 2)
+        }
+
+    return results
+
+
+
 
 if __name__ == "__main__":
     main()

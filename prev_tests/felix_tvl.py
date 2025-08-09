@@ -92,6 +92,5 @@ def main():
         tvl = calculate_vault_tvl(vault_contract, oracle_contract, name)
 
     
-
 if __name__ == "__main__":
     main()
