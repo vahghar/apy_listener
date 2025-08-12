@@ -13,7 +13,7 @@ load_dotenv()
 # === CONFIG ===
 PRICE_DECIMALS = 10 ** 8
 RPC_URL = os.getenv("RPC_URL")
-CHAIN = "hyperEvm"
+user_lped_usd = 1000
 
 # === HypurrFi Setup ===
 web3 = Web3(Web3.HTTPProvider(RPC_URL))
@@ -555,8 +555,7 @@ def calculate_effective_yield(current_apy: float, current_tvl: float, deposit_am
 
 def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) -> str:
     lines = [
-        "📊 *Yield Comparison Report*",
-        "⚠️ Based only on current APY and TVL — no projected dilution included\n"
+        "📊 *Yield Comparison Report*"
     ]
     
     all_assets = sorted(set(hyperlend_data.keys()) | set(hypurrfi_data.keys()) | set(felix_data.keys()))
@@ -613,9 +612,65 @@ def max_deposit_to_match_yield(higher_apy, higher_tvl, lower_apy) -> float:
         return 0.0
     return ((higher_apy - lower_apy) * higher_tvl) / lower_apy
 
+def calculate_points_apy_felix(user_lped_usd: float, vault_tvl_usd: float) -> Tuple[float, float]:
+
+    AIRDROP_PERCENT = 0.20      
+    FDV = 100_000_000
+    TOTAL_PROJECTED_POINTS = 3_650_926
+    WEEKLY_POINTS = 146_037
+    user_lped_usd = 1000
+
+    value_per_point = (AIRDROP_PERCENT * FDV) / TOTAL_PROJECTED_POINTS
+    weekly_points_value_usd = WEEKLY_POINTS * value_per_point
+    annual_points_value_usd = weekly_points_value_usd * 52
+
+    if vault_tvl_usd <= 0 or user_lped_usd <= 0:
+        return 0.0, 0.0
+    
+    user_share = user_lped_usd / vault_tvl_usd
+    
+    user_weekly_points = user_share * WEEKLY_POINTS
+    user_annual_points = user_weekly_points * 52
+    
+    #points_apy = (user_annual_points / user_lped_usd) * 100
+    
+    value_per_point = (AIRDROP_PERCENT * FDV) / TOTAL_PROJECTED_POINTS
+    user_annual_points_value_usd = user_annual_points * value_per_point
+    points_value_apy = ((user_annual_points_value_usd - user_lped_usd) / user_lped_usd) * 100
+    
+    #val = (user_share)*52*100*value_per_point
+
+    return points_value_apy
+
+def calculate_points_apy_hyperlend(user_lped_usd: float, vault_tvl_usd: float) -> float:
+    if vault_tvl_usd <= 0 or user_lped_usd <= 0:
+        return 0.0
+    
+    FDV = 500_000_000
+    AIRDROP_PERCENT = 0.30
+    TOTAL_POINTS = 160_000_000
+    #BASE_VALUE_PER_POINT = 0.5
+    
+    value_per_point = (AIRDROP_PERCENT * FDV) / TOTAL_POINTS 
+    WEEKLY_POINTS = 0.019 * TOTAL_POINTS  # ~3,040,000
+    
+    user_share = user_lped_usd / vault_tvl_usd
+    
+    user_weekly_points = user_share * WEEKLY_POINTS
+    user_annual_points = user_weekly_points * 52
+    
+    user_annual_points_value_usd = user_annual_points * value_per_point
+    
+    points_value_apy = ((user_annual_points_value_usd - user_lped_usd) / user_lped_usd) * 100
+    
+    return points_value_apy
+
 
 # === Run Script ===
 if __name__ == "__main__":
+    # Configuration
+    
+    # Fetch data
     yields_hyperlend = get_hyperlend_yields_and_tvl()
     yields_hypurrfi = get_hypurrfi_yields_and_tvl()
     yields_felix = get_felix_yields_and_tvl()
@@ -630,18 +685,24 @@ if __name__ == "__main__":
         current_report.append(f"\n🪙 *{token}*")
         if token in yields_hyperlend:
             hl = yields_hyperlend[token]
+            #hl_points_apy = calculate_points_apy_hyperlend(user_lped_usd, hl['tvl'])
+            #print(hl_points_apy)
             current_report.append(f"  - HyperLend: `{hl['apy']:.2f}%` (TVL: ${hl['tvl']:,.2f})")
         if token in yields_hypurrfi:
             hf = yields_hypurrfi[token]
             current_report.append(f"  - HypurrFi:  `{hf['apy']:.2f}%` (TVL: ${hf['tvl']:,.2f})")
         if token in yields_felix:
             fx = yields_felix[token]
+            #fx_points_apy = calculate_points_apy_felix(user_lped_usd, fx['tvl'])
+            #print(fx_points_apy)
             current_report.append(f"  - Felix:     `{fx['apy']:.2f}%` (TVL: ${fx['tvl']:,.2f})")
     
     # Output or send
     print("\n".join(current_report))
+    #print("\n" + "\n".join(projection_report))
     print("\n" + comparison_report)
 
+    # Uncomment if sending via Telegram
     # send_telegram_message("\n".join(current_report))
     # send_telegram_message("\n".join(projection_report))
     # send_telegram_message(comparison_report)

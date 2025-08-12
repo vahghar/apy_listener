@@ -41,15 +41,19 @@ data_provider_contract = web3.eth.contract(address=PROTOCOL_DATA_PROVIDER_ADDRES
 
 HYPERLEND_ORACLE_ADDRESS = web3.to_checksum_address("0xC9Fb4fbE842d57EAc1dF3e641a281827493A630e")
 HYPERLEND_DATA_PROVIDER_ADDRESS = web3.to_checksum_address("0x5481bf8d3946E6A3168640c1D7523eB59F055a29")
+IRM_ADDRESS = web3.to_check_sum_address("0xD01E9AA0ba6a4a06E756BC8C79579E6cef070822")
 
 
 with open("abi/HyperlendOracle.json") as f:
     hyperlend_oracle_abi = json.load(f)
 with open("abi/HyperlendDataProvider.json") as f:
     hyperlend_data_provider_abi = json.load(f)
+with open("abi/aaveIrm.json") as f:
+    irm_abi = json.load(f)
 
 hyperlend_oracle_contract = web3.eth.contract(address=HYPERLEND_ORACLE_ADDRESS, abi=hyperlend_oracle_abi)
 hyperlend_data_provider_contract = web3.eth.contract(address=HYPERLEND_DATA_PROVIDER_ADDRESS, abi=hyperlend_data_provider_abi)
+irm_contract = web3.eth.contract(address=IRM_ADDRESS, abi=irm_abi)
 
 MORPHO_CONTRACT = "0x68e37de8d93d3496ae143f2e900490f6280c57cd"
 FELIX_CONTRACT = "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483"
@@ -189,7 +193,7 @@ def get_hyperlend_yields_and_tvl():
         token_map = {
             "USDe": web3.to_checksum_address("0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"),
             "USD₮0": web3.to_checksum_address("0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb"),
-            "HYPE": web3.to_checksum_address("0x5555555555555555555555555555555555555555")
+            "HYPE": web3.to_checksum_address("0x5555555555555555555555555555555555555555")  # make sure this address is correct!
         }
 
         # Get prices for these tokens
@@ -551,15 +555,16 @@ def get_felix_yields_and_tvl():
         Projected APY after deposit
     """
     annual_rewards = (current_apy / 100) * current_tvl
-    return (annual_rewards / (current_tvl + deposit_amount)) * 100 '''
+    return (annual_rewards / (current_tvl + deposit_amount)) * 100'''
 
 def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) -> str:
     lines = [
-        "📊 *Yield Comparison Report*",
-        "⚠️ Based only on current APY and TVL — no projected dilution included\n"
+        "📊 *Yield Comparison Report*"
     ]
     
-    all_assets = sorted(set(hyperlend_data.keys()) | set(hypurrfi_data.keys()) | set(felix_data.keys()))
+    #all_assets = sorted(set(hyperlend_data.keys()) | set(hypurrfi_data.keys()) | set(felix_data.keys()))
+
+    all_assets = sorted(set(hyperlend_data.keys()) | set(hypurrfi_data.keys()))
 
     for asset in all_assets:
         protocols = {}
@@ -568,8 +573,8 @@ def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) 
             protocols["HyperLend"] = hyperlend_data[asset]
         if asset in hypurrfi_data:
             protocols["HypurrFi"] = hypurrfi_data[asset]
-        if asset in felix_data:
-            protocols["Felix"] = felix_data[asset]
+        #if asset in felix_data:
+        #    protocols["Felix"] = felix_data[asset]
 
         if len(protocols) < 2:
             continue  # not enough data to compare
@@ -594,25 +599,25 @@ def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) 
             recommendations.append(f"🔸 {top1_name} offers {abs(diff):.2f}% higher yield than {top2_name}")
 
             # Max deposit before top1 falls below top2
-            #max_deposit = max_deposit_to_match_yield(
-            #    top1_data['apy'], top1_data['tvl'], top2_data['apy']
-            #)
-            #if max_deposit > 0:
-            #    recommendations.append(
-            #        f"💰 Max deposit in {top1_name} before it drops below {top2_name}: ${max_deposit:,.2f}"
-            #    )
+            max_deposit = max_deposit_to_match_yield(
+                top1_data['apy'], top1_data['tvl'], top2_data['apy']
+            )
+            if max_deposit > 0:
+                recommendations.append(
+                    f"💰 Max deposit in {top1_name} before it drops below {top2_name}: ${max_deposit:,.2f}"
+                )
 
         lines.append(line)
         if recommendations:
             lines.extend(recommendations)
 
     return "\n".join(lines)
+    
 
-
-#def max_deposit_to_match_yield(higher_apy, higher_tvl, lower_apy) -> float:
-#    if lower_apy >= higher_apy or lower_apy == 0:
-#        return 0.0
-#    return ((higher_apy - lower_apy) * higher_tvl) / lower_apy
+def max_deposit_to_match_yield(higher_apy, higher_tvl, lower_apy) -> float:
+    if lower_apy >= higher_apy or lower_apy == 0:
+        return 0.0
+    return ((higher_apy - lower_apy) * higher_tvl) / lower_apy
 
 
 # === Run Script ===
@@ -622,14 +627,15 @@ if __name__ == "__main__":
     # Fetch data
     yields_hyperlend = get_hyperlend_yields_and_tvl()
     yields_hypurrfi = get_hypurrfi_yields_and_tvl()
-    yields_felix = get_felix_yields_and_tvl()
+    #yields_felix = get_felix_yields_and_tvl()
     
     # Generate reports
     current_report = ["🔍 *Current Yield Report*"]
-    comparison_report = compare_yields(yields_hyperlend, yields_hypurrfi, yields_felix)  
+    #comparison_report = compare_yields(yields_hyperlend, yields_hypurrfi, yields_felix)
+    comparison_report = compare_yields(yields_hyperlend, yields_hypurrfi)  
     
-    for token in sorted(set(yields_hyperlend.keys()) | set(yields_hypurrfi.keys()) | set(yields_felix.keys())):
-
+    #for token in sorted(set(yields_hyperlend.keys()) | set(yields_hypurrfi.keys()) | set(yields_felix.keys())):
+    for token in sorted(set(yields_hyperlend.keys()) | set(yields_hypurrfi.keys())):
         # Current yields
         current_report.append(f"\n🪙 *{token}*")
         if token in yields_hyperlend:
@@ -638,30 +644,12 @@ if __name__ == "__main__":
         if token in yields_hypurrfi:
             hf = yields_hypurrfi[token]
             current_report.append(f"  - HypurrFi:  `{hf['apy']:.2f}%` (TVL: ${hf['tvl']:,.2f})")
-        if token in yields_felix:
-            fx = yields_felix[token]
-            current_report.append(f"  - Felix:     `{fx['apy']:.2f}%` (TVL: ${fx['tvl']:,.2f})")
-        # Projection report (optional)
-        #projection_report.append(f"\n🪙 *{token}*")
-        #if token in yields_hyperlend:
-        #    hl = yields_hyperlend[token]
-        #    hl_proj = calculate_effective_yield(hl['apy'], hl['tvl'], TEST_DEPOSIT_AMOUNT)
-        #    projection_report.append(
-        #        f"  - HyperLend: `{hl['apy']:.2f}%` → `{hl_proj:.2f}%` (Δ: {hl['apy'] - hl_proj:.2f}pp)"
-        #    )
-        #if token in yields_hypurrfi:
-        #    hf = yields_hypurrfi[token]
-        #    if hf['tvl'] > 0:
-        #        hf_proj = calculate_effective_yield(hf['apy'], hf['tvl'], TEST_DEPOSIT_AMOUNT)
-        #        projection_report.append(
-        #            f"  - HypurrFi:  `{hf['apy']:.2f}%` → `{hf_proj:.2f}%` (Δ: {hf['apy'] - hf_proj:.2f}pp)"
-        #        )
-        #    else:
-        #        projection_report.append(f"  - HypurrFi:  `{hf['apy']:.2f}%` (No TVL)")
-    
+        #if token in yields_felix:
+        #    fx = yields_felix[token]
+        #    current_report.append(f"  - Felix:     `{fx['apy']:.2f}%` (TVL: ${fx['tvl']:,.2f})")
+        
     # Output or send
     print("\n".join(current_report))
-    #print("\n" + "\n".join(projection_report))
     print("\n" + comparison_report)
 
     # Uncomment if sending via Telegram
