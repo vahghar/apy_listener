@@ -1,14 +1,13 @@
-import requests
 import json
 import os
 from web3 import Web3
 from dotenv import load_dotenv
 from telebot import send_telegram_message
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Any
 import math
+import time
 
 load_dotenv()
-
 
 # === CONFIG ===
 PRICE_DECIMALS = 10 ** 8
@@ -23,12 +22,6 @@ if not web3.is_connected():
 
 ORACLE_ADDRESS = web3.to_checksum_address("0x9BE2ac1ff80950DCeb816842834930887249d9A8")
 PROTOCOL_DATA_PROVIDER_ADDRESS = web3.to_checksum_address("0x895C799a5bbdCb63B80bEE5BD94E7b9138D977d6")
-
-VAULT_ADDRESSES = {
-    "USDe": web3.to_checksum_address("0x835febf893c6dddee5cf762b0f8e31c5b06938ab"),
-    "USDT0": web3.to_checksum_address("0xfc5126377f0efc0041c0969ef9ba903ce67d151e"),
-    "HYPE": web3.to_checksum_address("0x2900ABd73631b2f60747e687095537B673c06A76"),
-}
 
 with open("abi/HyFiOracle.json") as f:
     oracle_abi = json.load(f)
@@ -117,66 +110,6 @@ def setup_contracts(web3: Web3, vault_address: str) -> Tuple[Any, Any]:
 
     return morpho_contract, felix_contract, vault_contract , oracle_contract
 
-#here starts for hyperlend
-'''def get_hyperlend_yields_and_tvl():
-    try:
-        SECONDS_PER_YEAR = 31536000
-        RAY = 10**27
-        PRICE_DECIMALS = 10**8
-        WHITELIST = ["USDe", "USD₮0", "kHYPE"]
-
-        # Map of symbols to addresses (based on your provided script)
-        token_map = {
-            "USDe": web3.to_checksum_address("0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34"),
-            "USD₮0": web3.to_checksum_address("0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb"),
-            "kHYPE": web3.to_checksum_address("0xfD739d4e423301CE9385c1fb8850539D657C296D")
-        }
-
-        price_addresses = [token_map[symbol] for symbol in WHITELIST]
-        prices = hyperlend_oracle_contract.functions.getAssetsPrices(price_addresses).call()
-        price_dict = {symbol: price for symbol, price in zip(WHITELIST, prices)}
-
-        reserve_tokens = hyperlend_data_provider_contract.functions.getAllReservesTokens().call()
-        results = {}
-
-        for token_symbol, token_address in reserve_tokens:
-            if token_symbol not in WHITELIST:
-                continue
-
-            token_address = web3.to_checksum_address(token_address)
-            try:
-                reserve_data = hyperlend_data_provider_contract.functions.getReserveData(token_address).call()
-                config_data = hyperlend_data_provider_contract.functions.getReserveConfigurationData(token_address).call()
-                total_supply = hyperlend_data_provider_contract.functions.getATokenTotalSupply(token_address).call()
-
-                liquidity_rate = reserve_data[5]
-                decimals = config_data[0]
-                token_price = price_dict.get(token_symbol, 0)
-
-                apy = 0.0
-                if liquidity_rate > 0:
-                    liquidity_rate_decimal = liquidity_rate / RAY
-                    apy = ((1 + liquidity_rate_decimal / SECONDS_PER_YEAR) ** SECONDS_PER_YEAR - 1) * 100
-
-                tvl = 0.0
-                if total_supply > 0 and token_price > 0:
-                    tvl = (total_supply * token_price) / (10**decimals * PRICE_DECIMALS)
-
-                results[token_symbol.replace("₮", "T")] = {
-                    "apy": round(apy, 2),
-                    "tvl": round(tvl, 2)
-                }
-
-            except Exception as e:
-                send_telegram_message(f"⚠️ Error processing {token_symbol}: {str(e)}")
-                continue
-
-        return results
-
-    except Exception as e:
-        send_telegram_message(f"❌ Error fetching HyperLend data on-chain: {e}")
-        return {}'''
-
 def get_hyperlend_yields_and_tvl():
     try:
         SECONDS_PER_YEAR = 31536000
@@ -234,61 +167,6 @@ def get_hyperlend_yields_and_tvl():
     except Exception as e:
         print(f"❌ Error fetching HyperLend data on-chain: {e}")
         return {}
-#here ends for hyperlend
-
-#here starts for hypurrfi
-'''def get_hypurrfi_yields_and_tvl():
-    SECONDS_PER_YEAR = 365 * 24 * 60 * 60
-    RAY = 10**27
-    PRICE_DECIMALS = 10**8
-
-    results = {}
-    
-    try:
-        reserve_tokens = data_provider_contract.functions.getAllReservesTokens().call()
-
-        for symbol, address in reserve_tokens:
-            symbol = symbol.replace("₮", "T").strip()
-            if symbol not in ["USD₮0", "kHYPE", "USDe", "USDT0"]:
-                continue
-
-            try:
-                # Get reserve data
-                data1 = data_provider_contract.functions.getReserveData(address).call()
-                data2 = data_provider_contract.functions.getReserveConfigurationData(address).call()
-                liquidity_rate = data1[5]  # liquidityRate in ray
-                decimals = data2[0]  # token decimals per reserve
-                DECIMALS = 10 ** decimals
-                
-                # Calculate APY with edge case handling
-                apy = 0.0
-                if liquidity_rate > 0:
-                    liquidity_rate_decimal = liquidity_rate / RAY
-                    apy = ((1 + liquidity_rate_decimal / SECONDS_PER_YEAR) ** SECONDS_PER_YEAR - 1) * 100
-
-        # TVL Calculation
-                tvl_usd = 0.0
-                try:
-                    total_supply = data_provider_contract.functions.getATokenTotalSupply(address).call()
-                    token_price = hyperlend_oracle_contract.functions.getAssetPrice(address).call()
-                    if total_supply > 0 and token_price > 0:
-                        tvl_usd = (total_supply * token_price) / (DECIMALS * PRICE_DECIMALS)
-                except Exception as e:
-                    tvl_usd = 0.0
-                results[symbol] = {
-                    "apy": round(apy, 2),
-                    "tvl": round(tvl_usd, 2)
-                }
-
-            except Exception as e:
-                send_telegram_message(f"⚠️ Error processing {symbol}: {str(e)}")
-                continue
-
-    except Exception as e:
-        send_telegram_message(f"❌ Critical error in HypurrFi data fetch: {str(e)}")
-        return {}
-
-    return results'''
 
 def get_hypurrfi_yields_and_tvl():
     SECONDS_PER_YEAR = 365 * 24 * 60 * 60
@@ -345,8 +223,6 @@ def get_hypurrfi_yields_and_tvl():
             continue
 
     return results
-
-#here ends for hypurrfi
 
 #here starts for felix
 def fetch_market_params(morpho_contract, market_id: str) -> Dict[str, Any]:
@@ -421,27 +297,30 @@ def calculate_borrow_apy(borrow_rate: int) -> float:
     Compute borrow APY from borrow rate (per second), compounded annually.
     Assumes borrow_rate is in 1e18 units (wei).
     """
-    rate_per_second = borrow_rate / 1e18  # Adjust if your unit is different
+    rate_per_second = borrow_rate / 1e18 
     seconds_per_year = 365 * 24 * 3600
     borrow_apy = (1 + rate_per_second) ** seconds_per_year - 1
-    return borrow_apy * 100  # percentage
+    return borrow_apy * 100 
 
 def calculate_supply_apy(borrow_rate: int, market_data: Dict[str, Any]) -> float:
-    """Compute supply APY from borrow rate, utilization, and fee"""
     rate_per_second = borrow_rate / 1e18
-    # Utilization = borrowed assets / supplied assets
+    #print(f"Borrow rate per second (decimal): {rate_per_second}")
+
     util = 0
     if market_data['totalSupplyAssets'] > 0:
         util = market_data['totalBorrowAssets'] / market_data['totalSupplyAssets']
+    #print(f"Utilization: {util}")
 
-    reserve_factor = market_data['fee'] / 1e18
-    # Supply rate per second
-    supply_rate = rate_per_second * util * (1 - reserve_factor)
-    # Annualize (compounding per second)
+    fee = market_data['fee'] / 1e18
+    #print(f"Fee (decimal): {fee}")
+
+    supply_rate = rate_per_second * util * (1 - fee)
+    #print(f"Supply rate per second: {supply_rate}")
+
     seconds_per_year = 365 * 24 * 3600
-    supply_apy = math.exp(supply_rate * seconds_per_year) - 1
-
-    return supply_apy * 100  # in percentage
+    #supply_apy = math.exp(supply_rate * seconds_per_year) - 1
+    supply_apy = (1 + supply_rate) ** seconds_per_year - 1
+    return supply_apy * 100  # percentage
 
 def calculate_vault_supply_apy(borrow_rates: list, market_datas: list) -> float:
     total_supply = sum(market_data['totalSupplyAssets'] for market_data in market_datas)
@@ -457,7 +336,6 @@ def calculate_vault_tvl(vault_contract, oracle_contract, vault_name: str) -> flo
     try:
         # Step 1: Get underlying asset
         asset_address = vault_contract.functions.asset().call()
-        #print(f"\n🔍 [{vault_name}] Underlying asset: {asset_address}")
 
         # Step 2: Get total assets and decimals
         raw_total_assets = vault_contract.functions.totalAssets().call()
@@ -468,12 +346,8 @@ def calculate_vault_tvl(vault_contract, oracle_contract, vault_name: str) -> flo
         else:
             decimals = vault_contract.functions.decimals().call()
 
-        #print(f"📦 [{vault_name}] Raw total assets: {raw_total_assets}")
-        #print(f"🔢 [{vault_name}] Vault decimals: {decimals}")
-
         # Step 3: Get token price from oracle
         token_price = oracle_contract.functions.getAssetPrice(asset_address).call()
-        #print(f"💲 [{vault_name}] Token price from oracle: {token_price}")
 
         if raw_total_assets == 0:
             print(f"⚠️ [{vault_name}] totalAssets is 0")
@@ -491,67 +365,64 @@ def calculate_vault_tvl(vault_contract, oracle_contract, vault_name: str) -> flo
         print(f"❌ [{vault_name}] Error calculating TVL: {e}")
         return 0.0
 
+
 def get_felix_yields_and_tvl():
     results = {}
     for token, market_ids in markets_by_token.items():
-        #print(f"\n🔹 Token: {token}")
         vault_address = VAULT_ADDRESSES[token]
         morpho_contract, felix_contract, vault_contract, oracle_contract = setup_contracts(web3, vault_address)
         borrow_rates, datas = [], []
+        total_vault_supply = 0
+        total_vault_borrow = 0
+        try:
+            vault_fee = vault_contract.functions.fee().call() / 1e18  # Convert from uint96 to decimal
+        except Exception as e:
+            print(f"❌ Failed to fetch vault fee: {e}")
+            vault_fee = 0
 
         for market_id in market_ids:
-            #print(f"\n➡️  Market ID: {market_id}")
+            
+            time.sleep(2)  
             market_params = fetch_market_params(morpho_contract, market_id)
-            if not market_params:
-                continue
-
             market_data = fetch_market_data(morpho_contract, market_id)
-            if not market_data:
+            
+            if not market_params or not market_data:
+                print("❌ Skipping: Failed to fetch market params/data")
                 continue
 
+            # Calculate utilization
+            util = 0
+            if market_data['totalSupplyAssets'] > 0:
+                util = market_data['totalBorrowAssets'] / market_data['totalSupplyAssets']
+
+            # Fetch borrow rate
             borrow_rate = call_borrow_rate_view(felix_contract, market_params, market_data)
             if borrow_rate is None:
+                print("❌ Skipping: Failed to fetch borrow rate")
                 continue
 
+            rate_per_second = borrow_rate / 1e18
             borrow_apy = calculate_borrow_apy(borrow_rate)
             supply_apy = calculate_supply_apy(borrow_rate, market_data)
 
+            # Apply vault fee to supply APY
             borrow_rates.append(borrow_rate)
             datas.append(market_data)
+            total_vault_supply += market_data['totalSupplyAssets']
+            total_vault_borrow += market_data['totalBorrowAssets']
 
-            #print(f"Supply APY: {supply_apy:.2f}%")
-        
         vault_apy = calculate_vault_supply_apy(borrow_rates, datas)
-        #print(f"🔸 Vault Supply APY ({token}): {vault_apy:.2f}%")
-
+        vault_apy = vault_apy * (1 - vault_fee)
+        
         vault_tvl = calculate_vault_tvl(vault_contract, oracle_contract, token)
-        #print(f"💰 Vault TVL ({token}): ${vault_tvl:,.2f}")
 
-        # Store results in dictionary
         results[token] = {
-            "apy": round(vault_apy, 2),
+            "apy": round(vault_apy, 2),  # Report the net APY after fees
             "tvl": round(vault_tvl, 2)
         }
 
     return results
 #here ends for felix
-
-'''def calculate_effective_yield(current_apy: float, current_tvl: float, deposit_amount: float) -> float:
-
-    """
-    Calculate future yield using the reward dilution formula:
-    (Annual Rewards / (TVL + Deposit)) * 100
-    
-    Args:
-        current_apy: Current APY percentage (e.g., 12.36 for 12.36%)
-        current_tvl: Current total value locked in USD
-        deposit_amount: Proposed deposit amount in USD
-    
-    Returns:
-        Projected APY after deposit
-    """
-    annual_rewards = (current_apy / 100) * current_tvl
-    return (annual_rewards / (current_tvl + deposit_amount)) * 100 '''
 
 def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) -> str:
     lines = [
@@ -593,26 +464,12 @@ def compare_yields(hyperlend_data: dict, hypurrfi_data: dict, felix_data: dict) 
         else:
             recommendations.append(f"🔸 {top1_name} offers {abs(diff):.2f}% higher yield than {top2_name}")
 
-            # Max deposit before top1 falls below top2
-            #max_deposit = max_deposit_to_match_yield(
-            #    top1_data['apy'], top1_data['tvl'], top2_data['apy']
-            #)
-            #if max_deposit > 0:
-            #    recommendations.append(
-            #        f"💰 Max deposit in {top1_name} before it drops below {top2_name}: ${max_deposit:,.2f}"
-            #    )
-
+   
         lines.append(line)
         if recommendations:
             lines.extend(recommendations)
 
     return "\n".join(lines)
-
-
-#def max_deposit_to_match_yield(higher_apy, higher_tvl, lower_apy) -> float:
-#    if lower_apy >= higher_apy or lower_apy == 0:
-#        return 0.0
-#    return ((higher_apy - lower_apy) * higher_tvl) / lower_apy
 
 
 # === Run Script ===
@@ -641,30 +498,36 @@ if __name__ == "__main__":
         if token in yields_felix:
             fx = yields_felix[token]
             current_report.append(f"  - Felix:     `{fx['apy']:.2f}%` (TVL: ${fx['tvl']:,.2f})")
-        # Projection report (optional)
-        #projection_report.append(f"\n🪙 *{token}*")
-        #if token in yields_hyperlend:
-        #    hl = yields_hyperlend[token]
-        #    hl_proj = calculate_effective_yield(hl['apy'], hl['tvl'], TEST_DEPOSIT_AMOUNT)
-        #    projection_report.append(
-        #        f"  - HyperLend: `{hl['apy']:.2f}%` → `{hl_proj:.2f}%` (Δ: {hl['apy'] - hl_proj:.2f}pp)"
-        #    )
-        #if token in yields_hypurrfi:
-        #    hf = yields_hypurrfi[token]
-        #    if hf['tvl'] > 0:
-        #        hf_proj = calculate_effective_yield(hf['apy'], hf['tvl'], TEST_DEPOSIT_AMOUNT)
-        #        projection_report.append(
-        #            f"  - HypurrFi:  `{hf['apy']:.2f}%` → `{hf_proj:.2f}%` (Δ: {hf['apy'] - hf_proj:.2f}pp)"
-        #        )
-        #    else:
-        #        projection_report.append(f"  - HypurrFi:  `{hf['apy']:.2f}%` (No TVL)")
-    
-    # Output or send
-    print("\n".join(current_report))
-    #print("\n" + "\n".join(projection_report))
+        
+    #print("\n".join(current_report))
     print("\n" + comparison_report)
 
-    # Uncomment if sending via Telegram
-    # send_telegram_message("\n".join(current_report))
+    #send_telegram_message("\n".join(current_report))
     # send_telegram_message("\n".join(projection_report))
-    # send_telegram_message(comparison_report)
+    send_telegram_message(comparison_report)
+
+'''if __name__ == "__main__":
+    print("🔍 Starting Felix APY Debug Analysis...\n")
+    
+    # Fetch Felix data with verbose logging
+    yields_felix = get_felix_yields_and_tvl()
+    
+    # Generate Felix-only report
+    felix_report = [
+        "📊 *Felix Vaults Performance Report*"
+    ]
+    
+    for token in sorted(yields_felix.keys()):
+        data = yields_felix[token]
+        felix_report.append(
+            f"🏦 *{token} Vault*\n"
+            f"  - APY: `{data['apy']:.2f}%`\n"
+            f"  - TVL: `${data['tvl']:,.2f}`\n"
+        )
+    
+    # Print debug output to console
+    print("\n=== Final Results ===")
+    print("\n".join(felix_report))
+    
+    # Optional: Send to Telegram
+    # send_telegram_message("\n".join(felix_report))'''
